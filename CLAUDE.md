@@ -45,9 +45,9 @@ mutlaka `.env` ile override edin.
 - `collectors/market/`: USDTRY, EURTRY, Ons Altın, Brent, BIST100 (yfinance) + türetilmiş Gram Altın — `market_data`'ya `fetched_at` ile yazıyor.
 - `collectors/kap/`: TUPRS için KAP duyuruları (KAP'ın gayri-resmi ama canlı doğrulanmış iç API'si, düşük hacimli) ve `company_financials` (yfinance — ROE/borç/nakit/temettü verimi + türetilmiş ROIC).
 - `.env` desteği: `python-dotenv` entegre edildi, `.env.example` eklendi, `.env` `.gitignore`'da.
+- Adım 5: `backend/` üzerinde minimal FastAPI iskeleti (`/dashboard`, `/companies/tuprs`) — yerelde `uvicorn backend.main:app --reload` ile ayağa kaldırılıp canlı doğrulandı. `.env`'de `DATABASE_URL=sqlite:///./atlas_dev.db` ile çalıştırıldı, `collectors/market/run_all.py` (`python -m` ile) gerçek market verisini yazdı, `/dashboard` bu veriyi 200 OK ile döndü.
 
 **Sırada (master prompt'un 9 adımlık geliştirme sırasına göre):**
-- Adım 5: `backend/` üzerinde minimal FastAPI iskeleti (`/dashboard`, `/companies/tuprs`)
 - Adım 6: `ai/analyzers/company_analyzer.py` — atlas_score (Buffett/Lynch/Graham/Dalio TR)
 - Adım 7: `ai/summaries/` — AI sabah brifingi
 - Adım 8-9: `frontend/app/dashboard/`, `frontend/app/companies/tuprs/`
