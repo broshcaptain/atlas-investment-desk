@@ -1,42 +1,35 @@
-# Atlas
+# Atlas — Yol Haritası ve Durum
 
-## Dil
-Tüm yanıtlar, sorular ve açıklamalar Türkçe olacak. Kod ve teknik terimler
-(değişken adları, fonksiyon isimleri) İngilizce kalabilir, ama açıklama metni
-her zaman Türkçe.
+> Kaynak: `docs/ATLAS_MASTER_PROMPT_v1.1.md` (v1.1 MVP) — İlk Geliştirme Görevi;
+> `CLAUDE.md` — Durum. Bu dosya, `CLAUDE.md`'deki "Durum" bölümüyle birlikte
+> güncel tutulmalı.
 
-Tek kullanıcı için profesyonel yatırım araştırma masaüstü uygulaması. Amaç hisse
-önermek değil, kullanıcının kendi yatırım kararlarının kalitesini artırmak.
-Ürün tanımı: `docs/product.md`, mimari: `docs/architecture.md`, yatırım/AI
-kuralları: `docs/investment_rules.md`, yol haritası ve durum:
-`docs/roadmap.md` (orijinal kaynak: `docs/ATLAS_MASTER_PROMPT_v1.1.md`).
+## İlk Geliştirme Görevi (9 adım)
 
-**Sistem şunu asla yapmaz:** al/sat tavsiyesi, kesinlik iddiası, kaynaksız iddia.
-**Sistem şunu yapar:** veriyi gösterir, olası yorumu ("olabilir" dili ile) sunar, kaynağı belirtir.
+1. Proje iskeletini klasör yapısına göre kur (bkz. `docs/architecture.md`).
+2. PostgreSQL şemasını `database/migrations/` altında oluştur (yukarıdaki 10
+   tablo, bkz. `docs/architecture.md`).
+3. `collectors/market/` için temel fiyat verisi çekme betiklerini yaz
+   (USDTRY, EURTRY, altın, Brent, BIST100).
+4. `collectors/kap/` için TUPRS'e özel KAP çekme betiğini yaz — hem duyuru
+   metni hem temel finansal veriyi (`company_financials`) doldursun.
+5. `backend/` üzerinde minimal FastAPI iskeleti kur — `/dashboard`,
+   `/companies/tuprs` endpoint'leri.
+6. `ai/analyzers/company_analyzer.py` içinde buffett_tr/lynch_tr/graham_tr/
+   dalio_tr çerçevelerini `company_financials`'a uygulayıp `atlas_score`
+   üret. Veri eksikse skor yerine "yetersiz veri" döner — sahte skor
+   üretilmez.
+7. `ai/summaries/` içinde sabah brifingi üretecek basit bir prompt +
+   fonksiyon yaz (henüz canlı veri toplama tamamlanmadan mock veriyle test
+   edilebilir).
+8. `frontend/app/dashboard/` üzerinde piyasa özeti ve brifing kartını
+   gösteren minimal arayüz kur.
+9. `frontend/app/companies/tuprs` üzerinde atlas_score ve KAP özetlerini
+   gösteren şirket sayfasını kur.
 
-## Teknoloji Yığını
+Her adımdan sonra dur, ne yapıldığını özetle, bir sonrakine geçmeden onay al.
 
-- Backend: Python, FastAPI
-- Frontend: Next.js 16 (App Router, Turbopack), TypeScript, Tailwind CSS
-- Database: PostgreSQL (yerelde `.env` ile override edilebilir)
-
-## Klasör Yapısı
-
-```
-frontend/     Next.js/TypeScript — app/components/lib/types, `npm run dev` ile localhost:3000
-backend/      FastAPI — routes/services/models/repositories/jobs/config
-database/     migrations/seeds/schema + database/atlas.db (eski SQLite, referans)
-collectors/   kap/tcmb/market/news/company_reports — veri toplama betikleri
-ai/           prompts/analyzers/validators/summaries
-docs/         product.md/architecture.md/investment_rules.md/roadmap.md + ATLAS_MASTER_PROMPT_v1.1.md (orijinal kaynak)
-scripts/      legacy_portfolio_tracker/ — eski Streamlit portföy takipçisi (referans, kullanılmıyor)
-```
-
-## Ortam Değişkenleri
-
-`.env.example`'ı `.env` olarak kopyalayın. `DATABASE_URL` ayarlanmazsa
-`backend/config/database.py` placeholder bir Postgres DSN'e düşer — prod'da
-mutlaka `.env` ile override edin.
+---
 
 ## Durum
 
@@ -52,23 +45,11 @@ mutlaka `.env` ile override edin.
 - Adım 7: `ai/summaries/morning_briefing.py` — `build_morning_briefing_prompt()` piyasa özeti ve şirket genel görünümü (atlas_score dahil) verisinden LLM'e gönderilmeye hazır bir prompt metni üretir; henüz gerçek bir LLM çağrısı yok (ayrı bir entegrasyon adımı). Veri bayatlığı (piyasa verisi 24 saatten eskiyse `[VERİ BAYAT]`) ve `yetersiz_veri` kontrolleri mock veriyle test edildi.
 - Adım 8: `frontend/` sıfırdan kuruldu (`create-next-app`, App Router, TypeScript, Tailwind). `frontend/app/dashboard/page.tsx` bir Server Component olarak `backend`'in `/dashboard` endpoint'ini (`API_BASE_URL`, varsayılan `http://localhost:8000`) sunucu tarafında çağırıp piyasa özetini kart olarak gösteriyor — her kart kaynağı ve "X saat/dakika önce güncellendi" bilgisini taşıyor, 24 saatten eski veri "Veri bayat" rozetiyle işaretleniyor (Düzeltme 1). Sabah brifingi kartı, LLM entegrasyonu henüz bağlı olmadığından açık bir "henüz aktif değil" durum mesajı gösteriyor — sahte/mock brifing metni yok. Kök `/` sayfası `/dashboard`'a yönlendiriyor. `npm run dev` + gerçek backend verisiyle tarayıcıda canlı doğrulandı (tüm 6 sembol, tr-TR sayı biçimi, kaynak/veri yaşı doğru render edildi).
 - Adım 9: `frontend/app/companies/tuprs/page.tsx` — `backend`'in `/companies/tuprs` endpoint'ini sunucu tarafında çağırıp şirket adı/sektör, `atlas_score` (skor, güven bandı + parantez içinde ham sayı, 4 çerçevenin (buffett/lynch/graham/dalio_tr) alt skorları ve `missing_criteria`), temel finansal veriler (ROE/ROIC/borç/nakit/temettü verimi, veri bayatlığı rozetiyle) ve son KAP duyurularını gösteriyor. Backend 404 döndüğünde (`getCompanyOverview`, `frontend/lib/api.ts`) veya duyuru listesi boşsa sahte veri üretmeden "yetersiz veri" mesajı gösteriliyor. Gerçek TUPRS verisiyle (atlas_score 81/100, Güven: Düşük) SSR HTML çıktısı üzerinden canlı doğrulandı.
-- `docs/` içeriği `product.md`/`architecture.md`/`investment_rules.md`/`roadmap.md` olarak bölündü — kaynak `ATLAS_MASTER_PROMPT_v1.1.md` ve bu dosya. Detaylı "Durum" takibi artık `docs/roadmap.md`'de de tutuluyor (bu bölümle birlikte güncel tutulmalı).
+- `docs/` içeriği `product.md`/`architecture.md`/`investment_rules.md`/`roadmap.md` olarak bölündü (bu dosyalar) — kaynak: `ATLAS_MASTER_PROMPT_v1.1.md` ve `CLAUDE.md`.
 
-**Sırada (master prompt'un 9 adımlık geliştirme sırasına göre):**
+**Sırada:**
 - Sabah brifingi için gerçek LLM entegrasyonu (Claude API — SDK/`.env` anahtarı) henüz yapılmadı, şu an sadece prompt üretiliyor; frontend'de de bu yüzden placeholder durumda.
 
 **Bilinen açık noktalar:**
 - `scripts/legacy_portfolio_tracker/` içindeki importlar kırık (kasıtlı olarak dokunulmadı).
 - KAP içerik metni yapılandırılmış duyurularda ham XBRL taksonomi etiketleri içeriyor (temiz düzyazı değil).
-
-## Kapsam dışı — dokunma
-
-Etki Analizi, Senaryo Motoru, Yatırım Mahkemesi, Tez Takibi, diğer 6 şirket (sadece
-TUPRS pilot), Ekonomi Akademisi, kişiselleştirme, `causal_relationships` tablosu.
-Bu modüllerden birine dokunman gerekecek gibi görünürse, kod yazmadan önce dur ve sor.
-
-## Zorunlu kurallar
-
-- Her veri satırında `fetched_at` zorunlu.
-- Güven skoru kullanıcıya ham sayı olarak gösterilmez — bant (Düşük/Orta/Yüksek) + parantez içinde sayı.
-- Veri eksikse sahte skor/sonuç üretme, "yetersiz veri" dön.
