@@ -27,7 +27,13 @@ def collect() -> dict:
     roe = info.get("returnOnEquity")
     debt = info.get("totalDebt")
     cash = info.get("totalCash")
-    dividend_yield = info.get("dividendYield")
+
+    # yfinance'in bu sürümünde (1.5.1) dividendYield yüzde-puan biriminde gelir
+    # (örn. 5.11 = %5.11), roe/roic ise kesir biriminde (0.1037 = %10.37).
+    # company_financials'ta tüm oranlar kesir biriminde tutulur, o yüzden burada
+    # 100'e bölünür.
+    raw_dividend_yield = info.get("dividendYield")
+    dividend_yield = raw_dividend_yield / 100 if raw_dividend_yield is not None else None
 
     source_note = f"yfinance:{YF_TICKER} (.info)"
     roic = None
