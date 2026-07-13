@@ -51,3 +51,15 @@ mutlaka `.env` ile override edin.
 **Bilinen açık noktalar:**
 - `scripts/legacy_portfolio_tracker/` içindeki importlar kırık (kasıtlı olarak dokunulmadı).
 - KAP içerik metni yapılandırılmış duyurularda ham XBRL taksonomi etiketleri içeriyor (temiz düzyazı değil).
+
+## Kapsam dışı — dokunma
+
+Etki Analizi, Senaryo Motoru, Yatırım Mahkemesi, Tez Takibi, diğer 6 şirket (sadece
+TUPRS pilot), Ekonomi Akademisi, kişiselleştirme, `causal_relationships` tablosu.
+Bu modüllerden birine dokunman gerekecek gibi görünürse, kod yazmadan önce dur ve sor.
+
+## Zorunlu kurallar
+
+- Her veri satırında `fetched_at` zorunlu.
+- Güven skoru kullanıcıya ham sayı olarak gösterilmez — bant (Düşük/Orta/Yüksek) + parantez içinde sayı.
+- Veri eksikse sahte skor/sonuç üretme, "yetersiz veri" dön.
