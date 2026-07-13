@@ -1,5 +1,10 @@
 # Atlas
 
+## Dil
+Tüm yanıtlar, sorular ve açıklamalar Türkçe olacak. Kod ve teknik terimler
+(değişken adları, fonksiyon isimleri) İngilizce kalabilir, ama açıklama metni
+her zaman Türkçe.
+
 Tek kullanıcı için profesyonel yatırım araştırma masaüstü uygulaması. Amaç hisse
 önermek değil, kullanıcının kendi yatırım kararlarının kalitesini artırmak.
 Tam ürün/mimari tanımı: `docs/ATLAS_MASTER_PROMPT_v1.1.md`.
