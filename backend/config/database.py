@@ -18,3 +18,12 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
 Base = declarative_base()
+
+
+def get_db():
+    """FastAPI dependency — istek başına bir DB oturumu açar ve kapatır."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
