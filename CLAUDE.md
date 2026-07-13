@@ -46,12 +46,13 @@ mutlaka `.env` ile override edin.
 - `collectors/kap/`: TUPRS için KAP duyuruları (KAP'ın gayri-resmi ama canlı doğrulanmış iç API'si, düşük hacimli) ve `company_financials` (yfinance — ROE/borç/nakit/temettü verimi + türetilmiş ROIC).
 - `.env` desteği: `python-dotenv` entegre edildi, `.env.example` eklendi, `.env` `.gitignore`'da.
 - Adım 5: `backend/` üzerinde minimal FastAPI iskeleti (`/dashboard`, `/companies/tuprs`) — yerelde `uvicorn backend.main:app --reload` ile ayağa kaldırılıp canlı doğrulandı. `.env`'de `DATABASE_URL=sqlite:///./atlas_dev.db` ile çalıştırıldı, `collectors/market/run_all.py` (`python -m` ile) gerçek market verisini yazdı, `/dashboard` bu veriyi 200 OK ile döndü.
+- Adım 6: `ai/analyzers/company_analyzer.py` — `buffett_tr`/`lynch_tr`/`graham_tr`/`dalio_tr` çerçeveleri `company_financials`'taki mevcut alanlarla (roe/roic/debt/cash/dividend_yield) çalışır; şemada olmayan klasik kriterler (F/K, PD/DD, PEG, çok yıllı geçmiş) `missing_criteria` olarak işaretlenir, sahte skorla doldurulmaz. Tek kaynaklı veri güven bandını otomatik "Düşük"e sabitler. `backend/services/company_service.py` üzerinden `/companies/tuprs` yanıtına `atlas_score` alanı olarak entegre edildi, canlı doğrulandı. Yan düzeltme: `collectors/kap/tuprs_financials.py`'de `dividend_yield` birim hatası giderildi (yfinance yüzde-puan döndürüyordu, roe/roic ile tutarlı kesir birimine çevrildi).
+- Adım 7: `ai/summaries/morning_briefing.py` — `build_morning_briefing_prompt()` piyasa özeti ve şirket genel görünümü (atlas_score dahil) verisinden LLM'e gönderilmeye hazır bir prompt metni üretir; henüz gerçek bir LLM çağrısı yok (ayrı bir entegrasyon adımı). Veri bayatlığı (piyasa verisi 24 saatten eskiyse `[VERİ BAYAT]`) ve `yetersiz_veri` kontrolleri mock veriyle test edildi.
 
 **Sırada (master prompt'un 9 adımlık geliştirme sırasına göre):**
-- Adım 6: `ai/analyzers/company_analyzer.py` — atlas_score (Buffett/Lynch/Graham/Dalio TR)
-- Adım 7: `ai/summaries/` — AI sabah brifingi
 - Adım 8-9: `frontend/app/dashboard/`, `frontend/app/companies/tuprs/`
 - `docs/` içeriğinin `product.md`/`architecture.md`/`investment_rules.md`/`roadmap.md` olarak bölünmesi henüz yapılmadı.
+- Sabah brifingi için gerçek LLM entegrasyonu (Claude API — SDK/`.env` anahtarı) henüz yapılmadı, şu an sadece prompt üretiliyor.
 
 **Bilinen açık noktalar:**
 - `scripts/legacy_portfolio_tracker/` içindeki importlar kırık (kasıtlı olarak dokunulmadı).
