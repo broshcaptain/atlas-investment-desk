@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 
+from ai.analyzers.company_analyzer import analyze_company
 from backend.models.company_financials import CompanyFinancials
 from backend.models.kap_announcement import KapAnnouncement
 from backend.repositories.company_repository import (
@@ -18,6 +19,7 @@ def get_company_overview(db: Session, code: str) -> dict | None:
 
     financials = get_latest_financials(db, company.id)
     announcements = get_recent_announcements(db, company.id, limit=ANNOUNCEMENTS_LIMIT)
+    serialized_financials = _serialize_financials(financials)
 
     return {
         "company": {
@@ -26,7 +28,8 @@ def get_company_overview(db: Session, code: str) -> dict | None:
             "sector": company.sector,
             "sub_sector": company.sub_sector,
         },
-        "financials": _serialize_financials(financials),
+        "financials": serialized_financials,
+        "atlas_score": analyze_company(serialized_financials, company_code=company.code),
         "recent_announcements": [_serialize_announcement(a) for a in announcements],
     }
 
