@@ -1,21 +1,33 @@
-"""AI Sabah Brifingi için prompt şablonu ve girdi hazırlama fonksiyonları.
+"""AI Sabah Brifingi için prompt şablonu, girdi hazırlama ve Gemini API
+entegrasyonu.
 
-Bu modül henüz bir LLM'e bağlı değil. `build_morning_briefing_prompt()`
-CLAUDE.md'nin zorunlu kurallarına uygun, mevcut piyasa/şirket verisinden
-üretilmiş nihai prompt metnini döner — gerçek metin üretimi (Claude API
-çağrısı) ayrı bir entegrasyon adımında eklenecek. Bu sayede canlı veri
-toplama veya API anahtarı olmadan, mock veriyle test edilebilir.
+`build_morning_briefing_prompt()` CLAUDE.md'nin zorunlu kurallarına uygun,
+mevcut piyasa/şirket verisinden üretilmiş nihai prompt metnini döner — canlı
+veri toplama veya API anahtarı olmadan, mock veriyle test edilebilir.
+`generate_morning_briefing()` bu prompt'u gerçek bir Gemini API çağrısıyla
+brifing metnine çevirir; veri eksikse veya `GEMINI_API_KEY` tanımlı değilse
+sahte metin üretmez, durumu açıkça döner.
 
 [Düzeltme 1] Piyasa verisi `MARKET_DATA_STALE_HOURS` saatten eskiyse
 "veri bayat" olarak işaretlenir — sessizce eski veriyle brifing üretilmez.
 """
 
+import os
 from datetime import datetime, timezone
 from typing import Optional
+
+import google.api_core.exceptions as google_api_exceptions
+import google.generativeai as genai
+from google.generativeai.types import generation_types
 
 MARKET_DATA_STALE_HOURS = 24
 ANNOUNCEMENT_CONTENT_PREVIEW_CHARS = 200
 MAX_ANNOUNCEMENTS_IN_BRIEFING = 5
+BRIEFING_MODEL = "gemini-flash-latest"
+# gemini-flash-latest "thinking" için de max_output_tokens bütçesini kullanıyor
+# (görünmeyen token'lar candidates_token_count'a girmez) — kısa bir brifing
+# metni için bile düşük bir bütçe yanıtı yarıda kesebiliyor, bu yüzden geniş.
+BRIEFING_MAX_OUTPUT_TOKENS = 4096
 
 BRIEFING_SYSTEM_PROMPT = """
 Sen Atlas uygulamasının sabah brifing yazarısın. Tek kullanıcı için, o günün
@@ -161,6 +173,16 @@ def _format_company_block(company: Optional[dict]) -> str:
     return "\n".join(lines)
 
 
+def _build_data_section(context: dict) -> str:
+    return (
+        f"Brifing zamanı: {context['generated_at'].isoformat()}\n\n"
+        + "PİYASA VERİSİ:\n"
+        + _format_market_lines(context["market"])
+        + "\n\nŞİRKET VERİSİ:\n"
+        + _format_company_block(context["company"])
+    )
+
+
 def build_morning_briefing_prompt(
     market_summary: Optional[dict],
     company_overview: Optional[dict] = None,
@@ -176,17 +198,64 @@ def build_morning_briefing_prompt(
     if context["status"] != "ok":
         return context
 
-    prompt = (
-        BRIEFING_SYSTEM_PROMPT
-        + "\n\n---\n\n"
-        + f"Brifing zamanı: {context['generated_at'].isoformat()}\n\n"
-        + "PİYASA VERİSİ:\n"
-        + _format_market_lines(context["market"])
-        + "\n\nŞİRKET VERİSİ:\n"
-        + _format_company_block(context["company"])
-    )
+    prompt = BRIEFING_SYSTEM_PROMPT + "\n\n---\n\n" + _build_data_section(context)
 
     return {"status": "ok", "prompt": prompt, "context": context}
+
+
+def generate_morning_briefing(
+    market_summary: Optional[dict],
+    company_overview: Optional[dict] = None,
+    now: Optional[datetime] = None,
+) -> dict:
+    """`build_morning_briefing_prompt()`'un ürettiği veriyi gerçek bir Gemini
+    API çağrısıyla brifing metnine çevirir.
+
+    Piyasa/şirket verisi yetersizse `{"status": "yetersiz_veri", ...}`,
+    `GEMINI_API_KEY` tanımlı değilse `{"status": "anahtar_eksik", ...}`,
+    API çağrısı başarısız olursa veya model içeriği reddederse
+    `{"status": "hata", ...}` döner — hiçbir durumda sahte brifing metni
+    üretilmez.
+    """
+    context = build_briefing_context(market_summary, company_overview, now)
+    if context["status"] != "ok":
+        return context
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        return {
+            "status": "anahtar_eksik",
+            "message": "GEMINI_API_KEY tanımlı değil, brifing üretilemedi.",
+        }
+
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(BRIEFING_MODEL, system_instruction=BRIEFING_SYSTEM_PROMPT)
+        response = model.generate_content(
+            _build_data_section(context),
+            generation_config=genai.GenerationConfig(max_output_tokens=BRIEFING_MAX_OUTPUT_TOKENS),
+        )
+        text = response.text
+    except google_api_exceptions.GoogleAPIError as e:
+        return {
+            "status": "hata",
+            "message": f"Brifing üretilirken API hatası oluştu: {e}",
+        }
+    except (
+        ValueError,
+        generation_types.BlockedPromptException,
+        generation_types.StopCandidateException,
+    ) as e:
+        return {
+            "status": "hata",
+            "message": f"Model brifing üretimini reddetti: {e}",
+        }
+
+    return {
+        "status": "ok",
+        "text": text,
+        "generated_at": context["generated_at"],
+    }
 
 
 if __name__ == "__main__":

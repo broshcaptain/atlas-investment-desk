@@ -2,7 +2,7 @@ import { BriefingCard } from "@/components/BriefingCard";
 import { MarketTile } from "@/components/MarketTile";
 import { getMarketSummary } from "@/lib/api";
 import { MARKET_DISPLAY_ORDER } from "@/lib/market-meta";
-import type { MarketItem } from "@/types/market";
+import type { Briefing, MarketItem } from "@/types/market";
 
 function sortByDisplayOrder(items: MarketItem[]): MarketItem[] {
   return [...items].sort(
@@ -12,11 +12,13 @@ function sortByDisplayOrder(items: MarketItem[]): MarketItem[] {
 
 export default async function DashboardPage() {
   let items: MarketItem[] = [];
+  let briefing: Briefing | null = null;
   let error: string | null = null;
 
   try {
     const dashboard = await getMarketSummary();
     items = sortByDisplayOrder(dashboard.items);
+    briefing = dashboard.briefing;
   } catch (e) {
     error = e instanceof Error ? e.message : "Bilinmeyen hata";
   }
@@ -58,7 +60,7 @@ export default async function DashboardPage() {
         <h2 id="briefing-heading" className="text-sm font-medium text-[var(--text-secondary)]">
           Sabah Brifingi
         </h2>
-        <BriefingCard />
+        {briefing && <BriefingCard briefing={briefing} />}
       </section>
     </main>
   );
