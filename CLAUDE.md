@@ -15,13 +15,13 @@ Tam ürün/mimari tanımı: `docs/ATLAS_MASTER_PROMPT_v1.1.md`.
 ## Teknoloji Yığını
 
 - Backend: Python, FastAPI
-- Frontend: Next.js, TypeScript (henüz kurulmadı)
+- Frontend: Next.js 16 (App Router, Turbopack), TypeScript, Tailwind CSS
 - Database: PostgreSQL (yerelde `.env` ile override edilebilir)
 
 ## Klasör Yapısı
 
 ```
-frontend/     Next.js/TypeScript (henüz iskelet yok)
+frontend/     Next.js/TypeScript — app/components/lib/types, `npm run dev` ile localhost:3000
 backend/      FastAPI — routes/services/models/repositories/jobs/config
 database/     migrations/seeds/schema + database/atlas.db (eski SQLite, referans)
 collectors/   kap/tcmb/market/news/company_reports — veri toplama betikleri
@@ -48,11 +48,12 @@ mutlaka `.env` ile override edin.
 - Adım 5: `backend/` üzerinde minimal FastAPI iskeleti (`/dashboard`, `/companies/tuprs`) — yerelde `uvicorn backend.main:app --reload` ile ayağa kaldırılıp canlı doğrulandı. `.env`'de `DATABASE_URL=sqlite:///./atlas_dev.db` ile çalıştırıldı, `collectors/market/run_all.py` (`python -m` ile) gerçek market verisini yazdı, `/dashboard` bu veriyi 200 OK ile döndü.
 - Adım 6: `ai/analyzers/company_analyzer.py` — `buffett_tr`/`lynch_tr`/`graham_tr`/`dalio_tr` çerçeveleri `company_financials`'taki mevcut alanlarla (roe/roic/debt/cash/dividend_yield) çalışır; şemada olmayan klasik kriterler (F/K, PD/DD, PEG, çok yıllı geçmiş) `missing_criteria` olarak işaretlenir, sahte skorla doldurulmaz. Tek kaynaklı veri güven bandını otomatik "Düşük"e sabitler. `backend/services/company_service.py` üzerinden `/companies/tuprs` yanıtına `atlas_score` alanı olarak entegre edildi, canlı doğrulandı. Yan düzeltme: `collectors/kap/tuprs_financials.py`'de `dividend_yield` birim hatası giderildi (yfinance yüzde-puan döndürüyordu, roe/roic ile tutarlı kesir birimine çevrildi).
 - Adım 7: `ai/summaries/morning_briefing.py` — `build_morning_briefing_prompt()` piyasa özeti ve şirket genel görünümü (atlas_score dahil) verisinden LLM'e gönderilmeye hazır bir prompt metni üretir; henüz gerçek bir LLM çağrısı yok (ayrı bir entegrasyon adımı). Veri bayatlığı (piyasa verisi 24 saatten eskiyse `[VERİ BAYAT]`) ve `yetersiz_veri` kontrolleri mock veriyle test edildi.
+- Adım 8: `frontend/` sıfırdan kuruldu (`create-next-app`, App Router, TypeScript, Tailwind). `frontend/app/dashboard/page.tsx` bir Server Component olarak `backend`'in `/dashboard` endpoint'ini (`API_BASE_URL`, varsayılan `http://localhost:8000`) sunucu tarafında çağırıp piyasa özetini kart olarak gösteriyor — her kart kaynağı ve "X saat/dakika önce güncellendi" bilgisini taşıyor, 24 saatten eski veri "Veri bayat" rozetiyle işaretleniyor (Düzeltme 1). Sabah brifingi kartı, LLM entegrasyonu henüz bağlı olmadığından açık bir "henüz aktif değil" durum mesajı gösteriyor — sahte/mock brifing metni yok. Kök `/` sayfası `/dashboard`'a yönlendiriyor. `npm run dev` + gerçek backend verisiyle tarayıcıda canlı doğrulandı (tüm 6 sembol, tr-TR sayı biçimi, kaynak/veri yaşı doğru render edildi).
 
 **Sırada (master prompt'un 9 adımlık geliştirme sırasına göre):**
-- Adım 8-9: `frontend/app/dashboard/`, `frontend/app/companies/tuprs/`
+- Adım 9: `frontend/app/companies/tuprs/` — atlas_score ve KAP özetlerini gösteren şirket sayfası.
 - `docs/` içeriğinin `product.md`/`architecture.md`/`investment_rules.md`/`roadmap.md` olarak bölünmesi henüz yapılmadı.
-- Sabah brifingi için gerçek LLM entegrasyonu (Claude API — SDK/`.env` anahtarı) henüz yapılmadı, şu an sadece prompt üretiliyor.
+- Sabah brifingi için gerçek LLM entegrasyonu (Claude API — SDK/`.env` anahtarı) henüz yapılmadı, şu an sadece prompt üretiliyor; frontend'de de bu yüzden placeholder durumda.
 
 **Bilinen açık noktalar:**
 - `scripts/legacy_portfolio_tracker/` içindeki importlar kırık (kasıtlı olarak dokunulmadı).
