@@ -30,14 +30,17 @@ export function AtlasScoreCard({ atlasScore }: { atlasScore: AtlasScore }) {
           </span>
         </div>
         {confidence && (
-          <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
-            <span
-              className={`h-2 w-2 rounded-full ${CONFIDENCE_DOT[confidence.band] ?? "bg-[var(--text-muted)]"}`}
-              aria-hidden="true"
-            />
-            <span>
-              Güven: {confidence.band} ({confidence.raw.toFixed(0)}/100)
-            </span>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+              <span
+                className={`h-2 w-2 rounded-full ${CONFIDENCE_DOT[confidence.band] ?? "bg-[var(--text-muted)]"}`}
+                aria-hidden="true"
+              />
+              <span>
+                Güven: {confidence.band} ({confidence.raw.toFixed(0)}/100)
+              </span>
+            </div>
+            <p className="max-w-xs text-right text-xs text-[var(--text-muted)]">{confidence.reason}</p>
           </div>
         )}
       </div>

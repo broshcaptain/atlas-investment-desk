@@ -173,7 +173,25 @@ def _confidence(frameworks: dict, source_count: int, has_conflicting_data: bool,
         "source_count": source_count,
         "has_conflicting_data": has_conflicting_data,
         "data_age_days": data_age_days,
+        "reason": _confidence_reason(source_count, has_conflicting_data, data_age_days, missing_total),
     }
+
+
+def _confidence_reason(
+    source_count: int, has_conflicting_data: bool, data_age_days: Optional[float], missing_total: int
+) -> str:
+    """Kullanıcının "neden bu güven bandı?" sorusuna kartta doğrudan
+    gösterilebilecek tek cümlelik, somut bir gerekçe döner — band/raw sayı
+    olarak tek başına bunu açıklamıyor."""
+    if source_count <= 1:
+        return "Tek kaynağa dayanıyor, henüz bağımsız bir ikinci kaynakla çapraz kontrol edilmedi."
+    if has_conflicting_data:
+        return f"{source_count} kaynak birbirinden belirgin şekilde farklı sayılar veriyor (bkz. kaynak notu)."
+    if data_age_days is not None and data_age_days > DATA_AGE_STALE_DAYS:
+        return f"Temel veri {data_age_days:.0f} günden eski."
+    if missing_total > 0:
+        return "Klasik kriterlerin bir kısmı (ör. F/K, PD/DD, çok yıllı geçmiş) mevcut veriyle değerlendirilemiyor."
+    return f"{source_count} bağımsız kaynak birbirini doğruluyor, veri güncel."
 
 
 def analyze_company(

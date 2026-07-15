@@ -23,6 +23,7 @@ export type Confidence = {
   source_count: number;
   has_conflicting_data: boolean;
   data_age_days: number | null;
+  reason: string;
 };
 
 export type Framework = {

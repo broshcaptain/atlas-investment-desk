@@ -97,6 +97,41 @@ def _relative_diff(a: Optional[float], b: Optional[float]) -> Optional[float]:
     return abs(a - b) / abs(a)
 
 
+def _fmt_pct(value: Optional[float]) -> str:
+    return f"%{value * 100:.1f}" if value is not None else "—"
+
+
+def _fmt_try(value: Optional[float]) -> str:
+    return f"{value:,.0f} ₺".replace(",", ".") if value is not None else "—"
+
+
+FIELD_LABELS = {"roe": "ROE", "roic": "ROIC", "debt": "Borç", "cash": "Nakit"}
+
+
+def _build_comparison_note(computed: dict, existing: CompanyFinancials, conflicting_fields: list) -> str:
+    """`source` alanına eklenen, kullanıcının doğrudan okuyabileceği bir
+    karşılaştırma notu üretir — ham float/pseudocode yerine biçimlendirilmiş
+    yüzde/TL değerleri, iki kaynağın yan yana gösterimi."""
+    existing_roe = float(existing.roe) if existing.roe is not None else None
+    existing_roic = float(existing.roic) if existing.roic is not None else None
+    existing_debt = float(existing.debt) if existing.debt is not None else None
+    existing_cash = float(existing.cash) if existing.cash is not None else None
+
+    note = (
+        "çapraz kontrol (isyatirim.com.tr vs yfinance): "
+        f"ROE {_fmt_pct(computed['roe'])} vs {_fmt_pct(existing_roe)}, "
+        f"ROIC {_fmt_pct(computed['roic'])} vs {_fmt_pct(existing_roic)}, "
+        f"Borç {_fmt_try(computed['debt'])} vs {_fmt_try(existing_debt)}, "
+        f"Nakit {_fmt_try(computed['cash'])} vs {_fmt_try(existing_cash)}"
+    )
+    if conflicting_fields:
+        labels = ", ".join(FIELD_LABELS[f] for f in conflicting_fields)
+        note += f" — {labels} alanlarında >%{int(CONFLICT_THRESHOLD * 100)} fark bulundu"
+    else:
+        note += " — kaynaklar tutarlı"
+    return note
+
+
 def collect() -> dict:
     company = get_or_create_company(TICKER, COMPANY_NAME, sector="Enerji")
 
@@ -132,12 +167,7 @@ def collect() -> dict:
         conflicting_fields = [k for k, v in diffs.items() if v is not None and v > CONFLICT_THRESHOLD]
         has_conflicting_data = bool(conflicting_fields)
 
-        comparison_note = (
-            f"çapraz kontrol: isyatirim.com.tr (ROE={computed['roe']}, ROIC={computed['roic']}, "
-            f"Borç={computed['debt']}, Nakit={computed['cash']})"
-        )
-        if conflicting_fields:
-            comparison_note += f" — {', '.join(conflicting_fields)} alanlarında >%{int(CONFLICT_THRESHOLD*100)} fark"
+        comparison_note = _build_comparison_note(computed, existing, conflicting_fields)
 
         existing.source_count = 2
         existing.has_conflicting_data = has_conflicting_data
