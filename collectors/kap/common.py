@@ -84,5 +84,47 @@ def fetch_disclosure_text(disclosure_index: int) -> str:
     for hidden in soup.find_all(style=lambda s: s and "display:none" in s.replace(" ", "")):
         hidden.decompose()
 
+    # Her alan, ham XBRL taksonomi adını (ör. "oda_ExplanationTextBlock|") ayrı
+    # bir hücrede taşıyor — okunabilir metne katkısı yok, kaldırılır.
+    for tag_cell in soup.find_all(class_="taxonomy-field-name-cell"):
+        tag_cell.decompose()
+
+    lines = _extract_readable_lines(soup)
+    if lines:
+        return "\n".join(lines)
+
+    # Tablo tabanlı (XBRL) yapı bulunamadıysa (ör. tablosuz düz metin
+    # duyurular), düz metne geri dön.
     text = soup.get_text(separator=" ", strip=True)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _extract_readable_lines(soup: BeautifulSoup) -> list:
+    """Etiket/değer tablolarını, taksonomiye özgü sınıf adlarına bağlı kalmadan
+    satır satır okunabilir metne çevirir: her tablo satırındaki hücre
+    metinleri "Etiket: değer" biçiminde birleştirilir, iç içe (label/değer
+    biçimlendirme) tablolar üst satırın metnine zaten dahil olduğu için ayrıca
+    işlenmez.
+    """
+    lines = []
+    for table in soup.find_all("table"):
+        if table.find_parent("table") is not None:
+            continue
+
+        tbodies = table.find_all("tbody", recursive=False)
+        row_containers = tbodies if tbodies else [table]
+        for container in row_containers:
+            for tr in container.find_all("tr", recursive=False):
+                cell_texts = [
+                    re.sub(r"\s+", " ", td.get_text(" ", strip=True)).strip()
+                    for td in tr.find_all("td", recursive=False)
+                ]
+                cell_texts = [t for t in cell_texts if t]
+                if not cell_texts:
+                    continue
+                if len(cell_texts) == 1:
+                    lines.append(cell_texts[0])
+                else:
+                    lines.append(f"{cell_texts[0]}: {' '.join(cell_texts[1:])}")
+
+    return lines

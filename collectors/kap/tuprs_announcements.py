@@ -1,6 +1,7 @@
 import time
 from datetime import datetime, timedelta, timezone
 
+from ai.summaries.announcement_summary import generate_announcement_summary
 from backend.config.database import SessionLocal
 from backend.models.kap_announcement import KapAnnouncement
 from collectors.kap.common import (
@@ -50,12 +51,18 @@ def collect() -> int:
             content = fetch_disclosure_text(disclosure_index)
             time.sleep(REQUEST_DELAY_SECONDS)
 
+            content = content or item.get("summary", "")
+            category = item.get("subject") or item.get("disclosureCategory")
+
+            summary_result = generate_announcement_summary(content, category=category)
+            ai_summary = summary_result["text"] if summary_result["status"] == "ok" else None
+
             row = KapAnnouncement(
                 company_id=company.id,
                 announced_at=_parse_kap_datetime(item["publishDate"]),
-                category=item.get("subject") or item.get("disclosureCategory"),
-                content=content or item.get("summary", ""),
-                ai_summary=None,
+                category=category,
+                content=content,
+                ai_summary=ai_summary,
                 source_url=source_url,
                 fetched_at=datetime.now(timezone.utc),
             )

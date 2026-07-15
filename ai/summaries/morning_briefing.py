@@ -1,11 +1,11 @@
-"""AI Sabah Brifingi için prompt şablonu, girdi hazırlama ve Gemini API
+"""AI Sabah Brifingi için prompt şablonu, girdi hazırlama ve Groq API
 entegrasyonu.
 
 `build_morning_briefing_prompt()` CLAUDE.md'nin zorunlu kurallarına uygun,
 mevcut piyasa/şirket verisinden üretilmiş nihai prompt metnini döner — canlı
 veri toplama veya API anahtarı olmadan, mock veriyle test edilebilir.
-`generate_morning_briefing()` bu prompt'u gerçek bir Gemini API çağrısıyla
-brifing metnine çevirir; veri eksikse veya `GEMINI_API_KEY` tanımlı değilse
+`generate_morning_briefing()` bu prompt'u gerçek bir Groq API çağrısıyla
+brifing metnine çevirir; veri eksikse veya `GROQ_API_KEY` tanımlı değilse
 sahte metin üretmez, durumu açıkça döner.
 
 [Düzeltme 1] Piyasa verisi `MARKET_DATA_STALE_HOURS` saatten eskiyse
@@ -16,33 +16,41 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-import google.api_core.exceptions as google_api_exceptions
-import google.generativeai as genai
-from google.generativeai.types import generation_types
+import groq
+from groq import Groq
+
+from ai.summaries.language_guard import find_non_turkish_script
 
 MARKET_DATA_STALE_HOURS = 24
 ANNOUNCEMENT_CONTENT_PREVIEW_CHARS = 200
 MAX_ANNOUNCEMENTS_IN_BRIEFING = 5
-BRIEFING_MODEL = "gemini-flash-latest"
-# gemini-flash-latest "thinking" için de max_output_tokens bütçesini kullanıyor
-# (görünmeyen token'lar candidates_token_count'a girmez) — kısa bir brifing
-# metni için bile düşük bir bütçe yanıtı yarıda kesebiliyor, bu yüzden geniş.
+BRIEFING_MODEL = "llama-3.3-70b-versatile"
 BRIEFING_MAX_OUTPUT_TOKENS = 4096
+# Model (llama-3.3-70b-versatile) gözlemsel olarak Türkçe metne rastgele
+# Çince/İngilizce kelimeler karıştırabiliyor (CLAUDE.md — Dil kuralını ihlal
+# eder); temperature=0.3'te bile tekrar görüldü. Daha da düşük bir değer bu
+# riski azaltır ama garanti etmez — asıl güvence sistem promptundaki DİL
+# kuralı (bkz. BRIEFING_SYSTEM_PROMPT).
+BRIEFING_TEMPERATURE = 0.1
 
 BRIEFING_SYSTEM_PROMPT = """
 Sen Atlas uygulamasının sabah brifing yazarısın. Tek kullanıcı için, o günün
 piyasa ve şirket verisini özetleyen kısa bir Türkçe brifing yazacaksın.
 
 Zorunlu kurallar:
-1. Al/sat tavsiyesi verme, kesinlik iddia etme ("kesin yükselecek" gibi ifadeler yasak).
-2. Veri ve yorumu ayır — yorum cümlelerinde "olabilir" dili kullan.
-3. Aşağıda verilmeyen hiçbir veriyi uydurma; bir bölüm için veri yoksa veya
+1. DİL: Yanıtının tamamı, başından sonuna kadar SADECE Türkçe olacak. Başka
+   hiçbir dilden (İngilizce, Çince, Arapça vb.) tek kelime, tek karakter
+   veya tek ifade bile karıştırma. Emin olamadığın bir terim varsa onu da
+   Türkçeleştir, olduğu gibi başka dilde bırakma.
+2. Al/sat tavsiyesi verme, kesinlik iddia etme ("kesin yükselecek" gibi ifadeler yasak).
+3. Veri ve yorumu ayır — yorum cümlelerinde "olabilir" dili kullan.
+4. Aşağıda verilmeyen hiçbir veriyi uydurma; bir bölüm için veri yoksa veya
    "yetersiz veri" olarak işaretlenmişse bunu açıkça söyle, tahmin üretme.
-4. "VERİ BAYAT" notu taşıyan piyasa verilerini kullanırken bunu kullanıcıya
+5. "VERİ BAYAT" notu taşıyan piyasa verilerini kullanırken bunu kullanıcıya
    açıkça belirt, güncelmiş gibi sunma.
-5. Güven skorlarını olduğu gibi (bant + parantez içi ham sayı) aktar, tek
+6. Güven skorlarını olduğu gibi (bant + parantez içi ham sayı) aktar, tek
    başına ham sayı olarak gösterme.
-6. KAP duyuru içeriği bazen ham XBRL taksonomi etiketleri içerebilir, düzyazı
+7. KAP duyuru içeriği bazen ham XBRL taksonomi etiketleri içerebilir, düzyazı
    gibi sunma; anlamlı bir özet çıkaramıyorsan bunu belirt.
 """.strip()
 
@@ -208,47 +216,52 @@ def generate_morning_briefing(
     company_overview: Optional[dict] = None,
     now: Optional[datetime] = None,
 ) -> dict:
-    """`build_morning_briefing_prompt()`'un ürettiği veriyi gerçek bir Gemini
+    """`build_morning_briefing_prompt()`'un ürettiği veriyi gerçek bir Groq
     API çağrısıyla brifing metnine çevirir.
 
     Piyasa/şirket verisi yetersizse `{"status": "yetersiz_veri", ...}`,
-    `GEMINI_API_KEY` tanımlı değilse `{"status": "anahtar_eksik", ...}`,
-    API çağrısı başarısız olursa veya model içeriği reddederse
-    `{"status": "hata", ...}` döner — hiçbir durumda sahte brifing metni
-    üretilmez.
+    `GROQ_API_KEY` tanımlı değilse `{"status": "anahtar_eksik", ...}`,
+    API çağrısı başarısız olursa veya yanıt Türkçe dışı bir alfabeden
+    karakter içeriyorsa `{"status": "hata", ...}` döner — hiçbir durumda
+    sahte veya dil kuralını ihlal eden brifing metni üretilmez.
     """
     context = build_briefing_context(market_summary, company_overview, now)
     if context["status"] != "ok":
         return context
 
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         return {
             "status": "anahtar_eksik",
-            "message": "GEMINI_API_KEY tanımlı değil, brifing üretilemedi.",
+            "message": "GROQ_API_KEY tanımlı değil, brifing üretilemedi.",
         }
 
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(BRIEFING_MODEL, system_instruction=BRIEFING_SYSTEM_PROMPT)
-        response = model.generate_content(
-            _build_data_section(context),
-            generation_config=genai.GenerationConfig(max_output_tokens=BRIEFING_MAX_OUTPUT_TOKENS),
+        client = Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model=BRIEFING_MODEL,
+            messages=[
+                {"role": "system", "content": BRIEFING_SYSTEM_PROMPT},
+                {"role": "user", "content": _build_data_section(context)},
+            ],
+            max_tokens=BRIEFING_MAX_OUTPUT_TOKENS,
+            temperature=BRIEFING_TEMPERATURE,
         )
-        text = response.text
-    except google_api_exceptions.GoogleAPIError as e:
+        text = response.choices[0].message.content
+    except groq.APIError as e:
         return {
             "status": "hata",
             "message": f"Brifing üretilirken API hatası oluştu: {e}",
         }
-    except (
-        ValueError,
-        generation_types.BlockedPromptException,
-        generation_types.StopCandidateException,
-    ) as e:
+
+    leaked_char = find_non_turkish_script(text)
+    if leaked_char:
         return {
             "status": "hata",
-            "message": f"Model brifing üretimini reddetti: {e}",
+            "message": (
+                f"Model yanıtında Türkçe dışı bir alfabeden karakter tespit edildi "
+                f"('{leaked_char}', U+{ord(leaked_char):04X}) — sonuç gösterilmiyor."
+            ),
         }
 
     return {

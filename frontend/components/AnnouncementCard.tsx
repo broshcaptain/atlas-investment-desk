@@ -22,8 +22,8 @@ export function AnnouncementCard({ announcement }: { announcement: Announcement 
       {announcement.ai_summary ? (
         <p className="text-sm text-[var(--text-primary)]">{announcement.ai_summary}</p>
       ) : (
-        // ai_summary yoksa ham içerik gösterilir — bilinen sınırlama: yapılandırılmış
-        // duyurularda bu ham XBRL taksonomi etiketleri içerebilir, temiz düzyazı değil.
+        // ai_summary yoksa (özet henüz üretilmemiş veya API hatası) ham içerik
+        // gösterilir — content artık XBRL etiketlerinden temizlenmiş düz metin.
         <p className="line-clamp-4 text-sm text-[var(--text-secondary)]">{announcement.content}</p>
       )}
 
