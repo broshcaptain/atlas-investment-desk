@@ -29,7 +29,12 @@ def get_company_overview(db: Session, code: str) -> dict | None:
             "sub_sector": company.sub_sector,
         },
         "financials": serialized_financials,
-        "atlas_score": analyze_company(serialized_financials, company_code=company.code),
+        "atlas_score": analyze_company(
+            serialized_financials,
+            company_code=company.code,
+            source_count=serialized_financials.get("source_count", 1),
+            has_conflicting_data=serialized_financials.get("has_conflicting_data", False),
+        ),
         "recent_announcements": [_serialize_announcement(a) for a in announcements],
     }
 
@@ -48,6 +53,8 @@ def _serialize_financials(financials: CompanyFinancials | None) -> dict:
         "dividend_yield": _to_float(financials.dividend_yield),
         "source": financials.source,
         "fetched_at": financials.fetched_at,
+        "source_count": financials.source_count,
+        "has_conflicting_data": financials.has_conflicting_data,
     }
 
 

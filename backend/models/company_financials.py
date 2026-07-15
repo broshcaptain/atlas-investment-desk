@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    Boolean,
     Column,
     Integer,
     String,
@@ -24,5 +25,9 @@ class CompanyFinancials(Base):
     dividend_yield = Column(Numeric(10, 4))
     source = Column(String(120), nullable=False)
     fetched_at = Column(DateTime(timezone=True), nullable=False)
+    # Bkz. database/migrations/0002_add_financials_source_tracking.sql —
+    # atlas_score güven bandını besler (ai/analyzers/company_analyzer.py).
+    source_count = Column(Integer, nullable=False, default=1)
+    has_conflicting_data = Column(Boolean, nullable=False, default=False)
 
     __table_args__ = (UniqueConstraint("company_id", "period"),)
